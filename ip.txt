@@ -1,0 +1,6 @@
+r5apex.exe: 34.218.86.175
+r5apex.exe: 2.16.174.204
+r5apex.exe: 52.41.114.144
+r5apex.exe: 52.5.236.137
+r5apex.exe: 3.225.81.135
+r5apex.exe: 50.16.72.141
