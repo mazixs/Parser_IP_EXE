@@ -1,11 +1,9 @@
 import psutil
 import time
 import configparser
-import os
 import platform
 import subprocess
 import signal
-import sys
 from concurrent.futures import ThreadPoolExecutor
 import threading
 import ipaddress

@@ -1,6 +1,0 @@
-EADesktop.exe: 54.209.190.238
-EADesktop.exe: 54.243.122.21
-EADesktop.exe: 18.207.76.36
-EADesktop.exe: 23.210.228.45
-EADesktop.exe: 34.200.128.237
-EADesktop.exe: 44.206.216.96
