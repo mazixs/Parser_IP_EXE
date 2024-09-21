@@ -22,12 +22,13 @@
 ### Используйте команду ниже для установки всех необходимых зависимостей:
 ```
 git clone https://github.com/mazixs/Parser_IP_EXE.git
-- `cd Parser_IP_EXE
+cd Parser_IP_EXE
 ```
 - `pip install -r requirements.txt`
 
 ### 🚀Запуск
 - `python parser.py`
+  
   или
 - `python3 parser.py`
 
