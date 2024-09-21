@@ -1,6 +1,6 @@
-r5apex.exe: 34.218.86.175
-r5apex.exe: 2.16.174.204
-r5apex.exe: 52.41.114.144
-r5apex.exe: 52.5.236.137
-r5apex.exe: 3.225.81.135
-r5apex.exe: 50.16.72.141
+EADesktop.exe: 54.209.190.238
+EADesktop.exe: 54.243.122.21
+EADesktop.exe: 18.207.76.36
+EADesktop.exe: 23.210.228.45
+EADesktop.exe: 34.200.128.237
+EADesktop.exe: 44.206.216.96

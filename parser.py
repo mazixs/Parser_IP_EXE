@@ -6,8 +6,9 @@ import platform
 import subprocess
 import signal
 import sys
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor
 import threading
+import ipaddress
 
 # Флаг для остановки программы при получении сигнала
 stop_event = None
@@ -41,7 +42,6 @@ def ping_ip(ip, ping_file, last_success_ping):
     command = ['ping', param, '1', ip]  # Один пакет пинга
 
     try:
-        # Если это Windows, принудительно декодируем вывод через cp866 и затем в utf-8
         if platform.system().lower() == 'windows':
             result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
             output = result.stdout.decode('cp866').encode('utf-8').decode('utf-8')
@@ -51,35 +51,27 @@ def ping_ip(ip, ping_file, last_success_ping):
 
         print(f"Ping output for {ip}:\n{output}")
 
-        # Если пинг успешен
         if result.returncode == 0:
             avg_ping = None
             if platform.system().lower() == 'windows':
-                # Для Windows ищем строку со средней задержкой
                 for line in output.splitlines():
                     if "Среднее" in line:
-                        print(f"Обработка строки: {line}")  # Диагностический вывод
-                        avg_ping = line.split("=")[-1].replace("мсек", "").strip()  # Извлекаем пинг
+                        avg_ping = line.split("=")[-1].replace("мсек", "").strip()
                         break
             else:
-                # Для Unix-подобных систем (Linux, macOS)
                 for line in output.splitlines():
-                    if 'rtt min/avg/max/mdev' in line:  # Обрабатываем строку с результатом
+                    if 'rtt min/avg/max/mdev' in line:
                         avg_ping = line.split('/')[1]  # Берем среднее значение (avg)
                         break
 
             avg_ping = avg_ping if avg_ping else "неизвестно"
-
-            # Обновляем время последнего успешного пинга
             current_time = time.time()
             last_success_ping[ip] = current_time
 
-            # Записываем результат пинга в лог-файл (в формате UTF-8)
             with open(ping_file, 'a', encoding='utf-8') as f_ping:
                 f_ping.write(f"IP {ip} пингуется успешно. Средний пинг: {avg_ping} мс.\n")
             return True
         else:
-            # Если пинг не успешен, проверяем, когда был последний успешный пинг
             last_ping_time = last_success_ping.get(ip)
             if last_ping_time:
                 time_since_last_ping = time.time() - last_ping_time
@@ -104,25 +96,53 @@ def read_config():
     ip_file = config.get('Output', 'ip_file')
     keenetic_file = config.get('Output', 'keenetic_file')
     ping_file = config.get('Output', 'ping_file')
+    
+    # Чтение настройки маски подсети (32, 24, 16)
+    subnet_mask = config.get('Subnet', 'mask', fallback="32")
 
     enable_ping = config.getint('Ping', 'enable_ping')
 
-    return exe_list, ip_file, keenetic_file, ping_file, enable_ping
+    return exe_list, ip_file, keenetic_file, ping_file, subnet_mask, enable_ping
 
-# Функция для отслеживания IP адресов процесса
-def track_ips_by_process(exe_name, ip_file, keenetic_file, ping_file, enable_ping, unique_keenetic_ips):
+# Функция для агрегации IP-адресов в подсети
+def group_ips_into_subnets(ips, submask):
+    subnets = set()
+    for ip in ips:
+        try:
+            ip_address = ipaddress.ip_address(ip)
+            if submask == "24":
+                network = ipaddress.ip_network(f"{ip}/24", strict=False)
+                subnet = f"{network.network_address}/24"
+                subnets.add(subnet)
+            elif submask == "16":
+                network = ipaddress.ip_network(f"{ip}/16", strict=False)
+                subnet = f"{network.network_address}/16"
+                subnets.add(subnet)
+            else:  # Для /32
+                subnet = f"{ip}/32"
+                subnets.add(subnet)
+        except ValueError as e:
+            print(f"Ошибка в IP адресе: {ip} - {e}")
+    return subnets
+
+# Функция для отслеживания IP-адресов процесса
+def track_ips_by_process(exe_name, ip_file, ping_file, subnet_mask, enable_ping, unique_keenetic_ips):
     print(f"Запущено отслеживание для процесса {exe_name}...")
 
     pid = None
-    while not stop_event.is_set():  # Ожидаем запуска процесса
+    while not stop_event.is_set():
         pid = get_pid_by_name(exe_name)
         if pid is not None:
             break
         time.sleep(2)
 
+    if pid is None:
+        print(f"Процесс {exe_name} не найден.")
+        return
+
     print(f"Процесс {exe_name} найден с PID: {pid}")
-    tracked_ips = set()  # Для хранения уникальных IP-адресов
-    last_success_ping = {}  # Для хранения времени последнего успешного пинга
+    tracked_ips = set()
+    last_success_ping = {}
 
     while not stop_event.is_set():
         connections = get_network_connections_by_pid(pid)
@@ -132,18 +152,11 @@ def track_ips_by_process(exe_name, ip_file, keenetic_file, ping_file, enable_pin
                     tracked_ips.add(ip)
                     print(f"Новый IP для {exe_name}: {ip}")
 
-                    # Записываем в ip_file с указанием имени процесса
                     with open(ip_file, 'a') as f_ip:
                         f_ip.write(f"{exe_name}: {ip}\n")
 
-                    # Проверяем на дубли в keenetic_file
-                    if ip not in unique_keenetic_ips:
-                        route_command = f"route ADD {ip} MASK 255.255.255.255 0.0.0.0\n"
-                        with open(keenetic_file, 'a') as f_keenetic:
-                            f_keenetic.write(route_command)
-                        unique_keenetic_ips.add(ip)
+                    unique_keenetic_ips.add(ip)
 
-                    # Если включен пинг, выполняем его
                     if enable_ping:
                         ping_ip(ip, ping_file, last_success_ping)
                 elif enable_ping:
@@ -154,41 +167,59 @@ def track_ips_by_process(exe_name, ip_file, keenetic_file, ping_file, enable_pin
 # Обработчик сигнала SIGINT (Ctrl+C)
 def signal_handler(sig, frame):
     print("\nОстановка программы...")
-    stop_event.set()  # Останавливаем все запущенные задачи
-    sys.exit(0)
+    stop_event.set()
 
 # Основная функция для чтения конфигурации и запуска отслеживания процессов
 def main():
     global stop_event
-    stop_event = threading.Event()  # Инициализируем событие для остановки потоков
+    stop_event = threading.Event()
 
-    # Устанавливаем обработчик сигнала Ctrl+C
     signal.signal(signal.SIGINT, signal_handler)
 
-    exe_list, ip_file, keenetic_file, ping_file, enable_ping = read_config()
+    exe_list, ip_file, keenetic_file, ping_file, subnet_mask, enable_ping = read_config()
 
-    # Очищаем содержимое файлов перед записью новых данных
     open(ip_file, 'w').close()
     open(keenetic_file, 'w').close()
     if enable_ping:
         open(ping_file, 'w', encoding='utf-8').close()
 
-    unique_keenetic_ips = set()  # Множество для хранения уникальных IP
+    unique_keenetic_ips = set()
 
     with ThreadPoolExecutor(max_workers=len(exe_list)) as executor:
         futures = []
         for exe_name in exe_list:
             futures.append(
                 executor.submit(
-                    track_ips_by_process, exe_name, ip_file, keenetic_file, ping_file, enable_ping, unique_keenetic_ips
+                    track_ips_by_process, exe_name, ip_file, ping_file, subnet_mask, enable_ping, unique_keenetic_ips
                 )
             )
 
-        for future in as_completed(futures):
-            try:
-                future.result()  # Ожидаем выполнения
-            except Exception as e:
-                print(f"Ошибка: {e}")
+        try:
+            while not stop_event.is_set():
+                time.sleep(1)
+        except KeyboardInterrupt:
+            print("\nПрерывание программы (Ctrl+C)")
+            stop_event.set()
+        finally:
+            stop_event.set()
+            executor.shutdown(wait=True)
+            print("Программа завершена.")
+
+    # После завершения процессов, агрегируем IP-адреса
+    aggregated_subnets = group_ips_into_subnets(unique_keenetic_ips, subnet_mask)
+
+    # Запись агрегированных команд маршрутизации в файл
+    with open(keenetic_file, 'w') as f:
+        for subnet in sorted(aggregated_subnets):
+            if subnet_mask == "24":
+                mask = "255.255.255.0"
+            elif subnet_mask == "16":
+                mask = "255.255.0.0"
+            else:  # "32"
+                mask = "255.255.255.255"
+            network_address = subnet.split('/')[0]
+            route_command = f"route ADD {network_address} MASK {mask} 0.0.0.0\n"
+            f.write(route_command)
 
 if __name__ == "__main__":
     main()
