@@ -21,10 +21,10 @@
 
 ### Используйте команду ниже для установки всех необходимых зависимостей:
 ```
+pip install psutil
 git clone https://github.com/mazixs/Parser_IP_EXE.git
 cd Parser_IP_EXE
 ```
-- `pip install psutil`
 
 ### 🚀Запуск
 - `python parser.py`
