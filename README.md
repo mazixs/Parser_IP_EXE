@@ -24,7 +24,7 @@
 git clone https://github.com/mazixs/Parser_IP_EXE.git
 cd Parser_IP_EXE
 ```
-- `pip install -r requirements.txt`
+- `pip install psutil`
 
 ### 🚀Запуск
 - `python parser.py`
