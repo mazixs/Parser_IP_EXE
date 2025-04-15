@@ -1,0 +1,23 @@
+[Processes]
+exe_list = ["chrome.exe", "python.exe"] # Список процессов для отслеживания (важно: регистр букв!)
+
+[Output]
+ip_file = "ip.txt"           # Файл для списка IP
+keenetic_file = "keenetic.bat" # Файл для команд маршрутизации
+ping_file = "ping.log"       # Файл для логов пинга
+domain_file = "domain.txt"   # Файл для доменных имен
+
+[Ping]
+enable_ping = 1               # 1 — включить пинг, 0 — выключить
+
+[Threading]
+max_ping_threads = 2          # Сколько потоков для пинга одновременно
+max_active_tasks = 4          # Сколько задач пинга одновременно
+ping_delay = 0.5              # Задержка между пингами (сек)
+ping_interval = 600           # Интервал повторного пинга (сек)
+
+[Domain]
+enable_domain_tracking = 1    # 1 — собирать домены, 0 — нет
+
+[Subnet]
+mask = "32"                  # Маска подсети: 16, 24 или 32

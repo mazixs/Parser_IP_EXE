@@ -1,0 +1,22 @@
+# Исключаем результаты работы и временные файлы
+results/
+results/*
+
+# Кэш Python
+__pycache__/
+modules/__pycache__/
+tests/__pycache__/
+
+# Логи, временные и выходные файлы
+*.log
+*.bat
+*.pyc
+*.pyo
+*.swp
+*.tmp
+
+# Конфигурации IDE и системные файлы
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
